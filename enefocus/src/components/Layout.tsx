@@ -14,6 +14,9 @@ import { RecordsView } from './records/RecordsView';
 import { ReportView } from './report/ReportView';
 import { LifeView } from './life/LifeView';
 import { SettingsView } from './settings/SettingsView';
+import { InactivityModal } from './ui/InactivityModal';
+import { useDailyReport } from '@/hooks/useDailyReport';
+import { useNotifications } from '@/hooks/useNotifications';
 
 const navItems = [
   { id: 'today', label: '오늘', icon: LayoutDashboard },
@@ -76,6 +79,12 @@ function HeaderBar() {
   );
 }
 
+function AppHooks() {
+  useDailyReport();
+  useNotifications();
+  return null;
+}
+
 export function Layout() {
   const { currentTab, setCurrentTab } = useStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -93,6 +102,8 @@ export function Layout() {
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
+      <AppHooks />
+      <InactivityModal />
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div

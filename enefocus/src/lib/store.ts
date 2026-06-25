@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type {
   Subject, Todo, StudySession, Material, MaterialUnit,
-  TodoRecord, ProofPhoto, ZoomSession, LifeLog, User
+  TodoRecord, ProofPhoto, ZoomSession, DailyReport, LifeLog, User
 } from './types';
 
 interface AppState {
@@ -65,6 +65,11 @@ interface AppState {
   updateZoomSession: (id: string, updates: Partial<ZoomSession>) => void;
   activeZoomSession: ZoomSession | null;
   setActiveZoomSession: (session: ZoomSession | null) => void;
+
+  // Daily Reports
+  dailyReports: DailyReport[];
+  addDailyReport: (report: DailyReport) => void;
+  updateDailyReport: (id: string, updates: Partial<DailyReport>) => void;
 
   // Life Logs
   lifeLogs: LifeLog[];
@@ -163,6 +168,12 @@ export const useStore = create<AppState>()(
       activeZoomSession: null,
       setActiveZoomSession: (session) => set({ activeZoomSession: session }),
 
+      dailyReports: [],
+      addDailyReport: (report) => set((s) => ({ dailyReports: [...s.dailyReports, report] })),
+      updateDailyReport: (id, updates) => set((s) => ({
+        dailyReports: s.dailyReports.map((r) => r.id === id ? { ...r, ...updates } : r),
+      })),
+
       lifeLogs: [],
       setLifeLogs: (logs) => set({ lifeLogs: logs }),
       addLifeLog: (log) => set((s) => ({ lifeLogs: [...s.lifeLogs, log] })),
@@ -187,6 +198,7 @@ export const useStore = create<AppState>()(
         todoRecords: state.todoRecords,
         proofPhotos: state.proofPhotos,
         zoomSessions: state.zoomSessions,
+        dailyReports: state.dailyReports,
         lifeLogs: state.lifeLogs,
         selectedDate: state.selectedDate,
       }),
