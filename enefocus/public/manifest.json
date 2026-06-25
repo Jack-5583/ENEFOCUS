@@ -1,0 +1,22 @@
+{
+  "name": "ENE Focus",
+  "short_name": "ENE Focus",
+  "description": "공부 계획, 타이머, 캠스터디, 인증, 리포트 통합 학습 관리 앱",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
