@@ -28,7 +28,7 @@ export function ZoomEmbedded({ meetingNumber, password, userName, role, signatur
         onLeave?.();
       }
       if (ev.data?.type === 'zoom-error') {
-        setError(ev.data.message ?? '알 수 없는 오류');
+        setError(String(ev.data.message ?? '메시지 없음'));
       }
     }
     window.addEventListener('message', handleMessage);
@@ -48,7 +48,7 @@ export function ZoomEmbedded({ meetingNumber, password, userName, role, signatur
         <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-black p-6 text-center">
           <AlertCircle size={36} className="text-red-400 mb-3" />
           <p className="text-red-400 text-sm font-semibold mb-2">Zoom 연결 실패</p>
-          <p className="text-gray-400 text-xs mb-4">{error}</p>
+          <pre className="text-gray-400 text-xs mb-4 max-w-xs text-left whitespace-pre-wrap break-all bg-white/5 p-2 rounded-lg max-h-40 overflow-auto">{error}</pre>
           <a
             href={`https://zoom.us/wc/${cleanNumber}/join`}
             target="_blank"
