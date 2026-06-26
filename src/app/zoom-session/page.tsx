@@ -2,6 +2,19 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
+function formatZoomError(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (typeof e === 'string') return e;
+  if (typeof e === 'object' && e !== null) {
+    const o = e as Record<string, unknown>;
+    const code = o.errorCode ?? o.code ?? '';
+    const msg = o.errorMessage ?? o.reason ?? o.message ?? '';
+    if (msg) return code ? `[${code}] ${msg}` : String(msg);
+    try { return JSON.stringify(e); } catch { /* ignore */ }
+  }
+  return `알 수 없는 오류: ${String(e)}`;
+}
+
 function loadScript(src: string): Promise<void> {
   return new Promise((resolve, reject) => {
     if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
@@ -82,8 +95,9 @@ function ZoomSessionInner() {
           }
         });
       } catch (e: unknown) {
+        console.error('[Zoom] error:', e);
         if (mounted) {
-          const msg = e instanceof Error ? e.message : '알 수 없는 오류';
+          const msg = formatZoomError(e);
           setErrorMsg(msg);
           setStatus('error');
           window.parent?.postMessage({ type: 'zoom-error', message: msg }, '*');
