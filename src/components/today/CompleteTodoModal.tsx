@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Input, Textarea } from '@/components/ui/Input';
 import { useStore } from '@/lib/store';
 import { generateId } from '@/lib/utils';
+import { uploadPhoto } from '@/lib/photoStorage';
 import type { Todo } from '@/lib/types';
 
 interface Props {
@@ -24,7 +25,7 @@ export function CompleteTodoModal({ todo, open, onClose }: Props) {
     memo: '',
     reviewDate: '',
   });
-  const [photos, setPhotos] = useState<Array<{ url: string; memo: string }>>([]);
+  const [photos, setPhotos] = useState<Array<{ url: string; memo: string; storageType?: 'supabase' | 'local' }>>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
 
@@ -36,8 +37,14 @@ export function CompleteTodoModal({ todo, open, onClose }: Props) {
   function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const url = URL.createObjectURL(file);
-    setPhotos((p) => [...p, { url, memo: '' }]);
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const dataUrl = reader.result as string;
+      const now = new Date().toISOString();
+      const { url, storageType } = await uploadPhoto(dataUrl, 'demo-user', now);
+      setPhotos((p) => [...p, { url, storageType, memo: '' }]);
+    };
+    reader.readAsDataURL(file);
   }
 
   function handleComplete() {
@@ -63,6 +70,7 @@ export function CompleteTodoModal({ todo, open, onClose }: Props) {
         userId: 'demo-user',
         todoId: todo.id,
         imageUrl: p.url,
+        storageType: p.storageType,
         source: 'upload',
         capturedAt: new Date().toISOString(),
         memo: p.memo,

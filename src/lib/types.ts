@@ -108,6 +108,7 @@ export interface ProofPhoto {
   studySessionId?: string;
   imageUrl: string;
   source: 'manual_camera' | 'upload' | 'zoom_capture' | 'webcam_snapshot';
+  storageType?: 'supabase' | 'local';
   capturedAt: string;
   memo?: string;
 }

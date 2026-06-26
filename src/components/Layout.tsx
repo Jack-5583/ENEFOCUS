@@ -1,11 +1,12 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Timer, Video, BookOpen,
   FileText, BarChart3, Heart, Settings, Menu, X
 } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import { formatDate, getToday } from '@/lib/utils';
+import { cleanupOldPhotos } from '@/lib/photoStorage';
 import { TodayView } from './today/TodayView';
 import { TimerView } from './timer/TimerView';
 import { CamstudyView } from './camstudy/CamstudyView';
@@ -80,8 +81,14 @@ function HeaderBar() {
 }
 
 function AppHooks() {
+  const { proofPhotos, deleteProofPhoto } = useStore();
   useDailyReport();
   useNotifications();
+  useEffect(() => {
+    cleanupOldPhotos(proofPhotos, deleteProofPhoto);
+  // Run once on mount to clean up expired Supabase photos
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   return null;
 }
 
