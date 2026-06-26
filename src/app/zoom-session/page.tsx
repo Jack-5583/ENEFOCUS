@@ -2,8 +2,19 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
+function loadScript(src: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error(`Script load failed: ${src}`));
+    document.head.appendChild(s);
+  });
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyZoom = any;
+declare const window: Window & { ReactWidgets?: any };
 
 function ZoomSessionInner() {
   const params = useSearchParams();
@@ -12,11 +23,11 @@ function ZoomSessionInner() {
   const [errorMsg, setErrorMsg] = useState('');
 
   const meetingNumber = params.get('mn') ?? '';
-  const signature   = params.get('sig') ?? '';
-  const sdkKey      = params.get('key') ?? '';
-  const password    = params.get('pwd') ?? '';
-  const userName    = params.get('un') ?? 'User';
-  const role        = (Number(params.get('role') ?? 0)) as 0 | 1;
+  const signature    = params.get('sig') ?? '';
+  const sdkKey       = params.get('key') ?? '';
+  const password     = params.get('pwd') ?? '';
+  const userName     = params.get('un') ?? 'User';
+  const role         = (Number(params.get('role') ?? 0)) as 0 | 1;
 
   useEffect(() => {
     let mounted = true;
@@ -24,10 +35,21 @@ function ZoomSessionInner() {
     async function init() {
       if (!containerRef.current) return;
       try {
+        // Load via script tags to bypass Turbopack's CJS resolver,
+        // which fails to resolve require("react") inside the Zoom UMD bundle.
+        // The global (window) branch of the UMD reads window.React / window.ReactDOM.
+        await loadScript('/zoom-sdk/react.js');
+        await loadScript('/zoom-sdk/react-dom.js');
+        await loadScript('/zoom-sdk/zoom-embedded.js');
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const mod: AnyZoom = await import('@zoom/meetingsdk/embedded');
-        const ZoomMtgEmbedded = mod.default ?? mod;
-        const client: AnyZoom = ZoomMtgEmbedded.createClient();
+        const ZoomMtgEmbedded = (window as any).ReactWidgets;
+        if (!ZoomMtgEmbedded?.createClient) {
+          throw new Error('Zoom SDK 로드 실패 (ReactWidgets undefined)');
+        }
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const client: any = ZoomMtgEmbedded.createClient();
 
         await client.init({
           zoomAppRoot: containerRef.current,
@@ -61,9 +83,10 @@ function ZoomSessionInner() {
         });
       } catch (e: unknown) {
         if (mounted) {
-          setErrorMsg(e instanceof Error ? e.message : '알 수 없는 오류');
+          const msg = e instanceof Error ? e.message : '알 수 없는 오류';
+          setErrorMsg(msg);
           setStatus('error');
-          window.parent?.postMessage({ type: 'zoom-error', message: e instanceof Error ? e.message : '알 수 없는 오류' }, '*');
+          window.parent?.postMessage({ type: 'zoom-error', message: msg }, '*');
         }
       }
     }

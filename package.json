@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/copy-zoom-sdk.mjs",
+    "prebuild": "node scripts/copy-zoom-sdk.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
