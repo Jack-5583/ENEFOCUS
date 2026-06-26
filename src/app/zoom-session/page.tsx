@@ -51,34 +51,30 @@ function Spinner({ label }: { label: string }) {
   );
 }
 
-function LoginRequiredView({ authUrl, meetingNumber, onLogin }: { authUrl?: string; meetingNumber: string; onLogin: () => void }) {
+function LoginRequiredView({ meetingNumber }: { meetingNumber: string }) {
   const cleanNum = meetingNumber.replace(/\D/g, '');
   return (
-    <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#fff', zIndex: 10, padding: 24, textAlign: 'center' }}>
-      <div style={{ fontSize: 40, marginBottom: 16 }}>🔐</div>
-      <p style={{ color: '#f87171', fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Zoom 계정 로그인 필요</p>
-      <p style={{ color: '#d1d5db', fontSize: 12, lineHeight: 1.8, marginBottom: 24, maxWidth: 300 }}>
-        이 회의는 Zoom 계정 로그인이 필요합니다.<br />
-        아래 버튼으로 로그인하면 자동으로 재연결됩니다.<br />
-        <span style={{ color: '#9ca3af', fontSize: 11 }}>(팝업 허용이 필요할 수 있습니다)</span>
-      </p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%', maxWidth: 260 }}>
-        {authUrl && (
-          <button
-            onClick={onLogin}
-            style={{ background: '#2563eb', color: '#fff', fontSize: 14, fontWeight: 700, padding: '12px 0', borderRadius: 12, border: 'none', cursor: 'pointer', width: '100%' }}
-          >
-            Zoom으로 로그인 후 자동 재연결
-          </button>
-        )}
-        <a
-          href={`https://zoom.us/wc/${cleanNum}/join`}
-          target="_top"
-          style={{ display: 'block', background: 'rgba(255,255,255,0.12)', color: '#fff', fontSize: 12, padding: '10px 0', borderRadius: 12, textDecoration: 'none' }}
-        >
-          브라우저에서 직접 열기
-        </a>
+    <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#fff', zIndex: 10, padding: 28, textAlign: 'center' }}>
+      <div style={{ fontSize: 36, marginBottom: 14 }}>🔒</div>
+      <p style={{ color: '#f87171', fontSize: 15, fontWeight: 700, marginBottom: 10 }}>이 회의는 로그인이 필요합니다</p>
+      <p style={{ color: '#9ca3af', fontSize: 11, marginBottom: 20 }}>오류 코드: 3051</p>
+
+      <div style={{ background: '#1f2937', borderRadius: 12, padding: '16px 20px', marginBottom: 20, maxWidth: 320, textAlign: 'left' }}>
+        <p style={{ color: '#fbbf24', fontSize: 12, fontWeight: 700, marginBottom: 8 }}>🛠 회의 호스트가 해야 할 일</p>
+        <p style={{ color: '#d1d5db', fontSize: 11, lineHeight: 1.8 }}>
+          Zoom 앱 → 미팅 설정 (또는 zoom.us → 설정)<br />
+          → <b style={{ color: '#fff' }}>보안</b> 탭<br />
+          → <b style={{ color: '#fff' }}>"인증된 사용자만 미팅에 참여"</b> OFF
+        </p>
       </div>
+
+      <a
+        href={`https://zoom.us/wc/${cleanNum}/join`}
+        target="_top"
+        style={{ display: 'block', background: 'rgba(255,255,255,0.12)', color: '#fff', fontSize: 12, padding: '10px 24px', borderRadius: 24, textDecoration: 'none' }}
+      >
+        Zoom 웹 클라이언트에서 직접 참여
+      </a>
     </div>
   );
 }
@@ -158,23 +154,6 @@ function ZoomSessionInner() {
     }
   }, []);
 
-  // popup login → close → retry join
-  const handleLoginAndRetry = useCallback((authUrl: string) => {
-    const popup = window.open(authUrl, 'zoom-auth', 'width=520,height=660,left=200,top=80');
-    if (!popup) {
-      // popup blocked → open in same frame
-      window.location.href = authUrl;
-      return;
-    }
-    setStep('재연결 중');
-    const timer = setInterval(() => {
-      if (popup.closed) {
-        clearInterval(timer);
-        joinMeeting().catch(handleJoinError);
-      }
-    }, 600);
-  }, [joinMeeting, handleJoinError]);
-
   useEffect(() => {
     mountedRef.current = true;
 
@@ -243,12 +222,8 @@ function ZoomSessionInner() {
   return (
     <div style={{ width: '100vw', height: '100vh', background: '#000', position: 'relative' }}>
       {isSpinning && <Spinner label={`${spinLabel} 중...`} />}
-      {step === '로그인 필요' && zoomErr && (
-        <LoginRequiredView
-          authUrl={zoomErr.url}
-          meetingNumber={meetingNumber}
-          onLogin={() => zoomErr.url && handleLoginAndRetry(zoomErr.url)}
-        />
+      {step === '로그인 필요' && (
+        <LoginRequiredView meetingNumber={meetingNumber} />
       )}
       {step === '실패' && zoomErr && (
         <FailView err={zoomErr} meetingNumber={meetingNumber} />
