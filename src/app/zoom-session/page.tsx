@@ -34,8 +34,22 @@ declare const window: Window & { ReactWidgets?: any };
 type Step = '스크립트 로딩' | 'SDK 초기화' | '회의 연결' | '로그인 필요' | '재연결 중' | '완료' | '실패';
 
 // ── error descriptions ─────────────────────────────────────────────────────
-const ERROR_GUIDE: Record<number, { title: string; desc: string }> = {
-  3712: { title: 'SDK 키 오류', desc: 'SDK Key/Secret이 올바르지 않습니다.\nVERCEL 환경변수 ZOOM_SDK_KEY / ZOOM_SDK_SECRET을 확인하세요.' },
+const ERROR_GUIDE: Record<number, { title: string; desc: string; fix?: string }> = {
+  4011: {
+    title: '크로스 계정 참여 오류',
+    desc: 'SDK 앱의 Zoom 계정과 회의 호스트의 계정이 달라 참여가 차단되었습니다.',
+    fix: 'marketplace.zoom.us → 내 SDK 앱 → Features\n→ "Allow users from outside the account to join" 활성화\n\n또는 회의 호스트에게 외부 참여 허용을 요청하세요.',
+  },
+  3051: {
+    title: '로그인 필요',
+    desc: '이 회의는 Zoom 계정 로그인이 필요합니다.',
+    fix: 'zoom.us → 설정 → 보안\n→ "인증된 사용자만 미팅에 참여" OFF',
+  },
+  3712: {
+    title: 'SDK 키 오류',
+    desc: 'SDK Key/Secret이 올바르지 않습니다.',
+    fix: 'Vercel 환경변수 ZOOM_SDK_KEY / ZOOM_SDK_SECRET을 확인하세요.',
+  },
   3001: { title: '회의를 찾을 수 없음', desc: '회의 ID가 존재하지 않거나 만료되었습니다.' },
   200:  { title: '비밀번호 오류', desc: '회의 비밀번호가 틀렸습니다.' },
 };
@@ -83,13 +97,19 @@ function FailView({ err, meetingNumber }: { err: ZoomError; meetingNumber: strin
   const guide = err.errorCode ? ERROR_GUIDE[err.errorCode] : undefined;
   return (
     <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#fff', zIndex: 10, padding: 24, textAlign: 'center' }}>
-      <p style={{ color: '#f87171', fontSize: 15, fontWeight: 700, marginBottom: 6 }}>
+      <p style={{ color: '#f87171', fontSize: 15, fontWeight: 700, marginBottom: 4 }}>
         {guide?.title ?? 'Zoom 연결 실패'}
       </p>
       {err.errorCode && <p style={{ color: '#6b7280', fontSize: 11, marginBottom: 10 }}>오류 코드: {err.errorCode}</p>}
-      <p style={{ color: '#d1d5db', fontSize: 12, marginBottom: 20, whiteSpace: 'pre-line', lineHeight: 1.7, maxWidth: 320 }}>
+      <p style={{ color: '#d1d5db', fontSize: 12, marginBottom: guide?.fix ? 12 : 20, whiteSpace: 'pre-line', lineHeight: 1.6, maxWidth: 320 }}>
         {guide?.desc ?? (err.reason ?? '알 수 없는 오류')}
       </p>
+      {guide?.fix && (
+        <div style={{ background: '#1f2937', borderRadius: 10, padding: '12px 16px', marginBottom: 20, maxWidth: 320, textAlign: 'left' }}>
+          <p style={{ color: '#fbbf24', fontSize: 11, fontWeight: 700, marginBottom: 6 }}>🛠 해결 방법</p>
+          <p style={{ color: '#d1d5db', fontSize: 11, whiteSpace: 'pre-line', lineHeight: 1.7 }}>{guide.fix}</p>
+        </div>
+      )}
       <a
         href={`https://zoom.us/wc/${meetingNumber.replace(/\D/g, '')}/join`}
         target="_top"
