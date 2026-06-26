@@ -81,14 +81,20 @@ function HeaderBar() {
 }
 
 function AppHooks() {
-  const { proofPhotos, deleteProofPhoto } = useStore();
+  const { loadAll, initialized, proofPhotos, deleteProofPhoto } = useStore();
   useDailyReport();
   useNotifications();
+
   useEffect(() => {
-    cleanupOldPhotos(proofPhotos, deleteProofPhoto);
-  // Run once on mount to clean up expired Supabase photos
+    loadAll();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (initialized) cleanupOldPhotos(proofPhotos, deleteProofPhoto);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialized]);
+
   return null;
 }
 

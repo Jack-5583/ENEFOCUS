@@ -1,11 +1,16 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { db, loadAllFromSupabase, pushAllToSupabase } from './db';
 import type {
   Subject, Todo, StudySession, Material, MaterialUnit,
   TodoRecord, ProofPhoto, ZoomSession, DailyReport, LifeLog, User
 } from './types';
 
 interface AppState {
+  // Sync state
+  initialized: boolean;
+  loadAll: () => Promise<void>;
+
   // User
   user: User | null;
   setUser: (user: User | null) => void;
@@ -86,7 +91,57 @@ interface AppState {
 
 export const useStore = create<AppState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
+      initialized: false,
+
+      loadAll: async () => {
+        const userId = get().user?.id ?? 'demo-user';
+        const serverData = await loadAllFromSupabase(userId);
+
+        if (!serverData) {
+          // Supabase not configured — use localStorage only
+          set({ initialized: true });
+          return;
+        }
+
+        const hasServerData =
+          serverData.subjects.length > 0 ||
+          serverData.todos.length > 0 ||
+          serverData.studySessions.length > 0;
+
+        if (!hasServerData) {
+          // First-time Supabase setup: migrate localStorage data to server
+          const s = get();
+          await pushAllToSupabase(userId, {
+            subjects: s.subjects,
+            todos: s.todos,
+            studySessions: s.studySessions,
+            materials: s.materials,
+            materialUnits: s.materialUnits,
+            todoRecords: s.todoRecords,
+            proofPhotos: s.proofPhotos,
+            zoomSessions: s.zoomSessions,
+            dailyReports: s.dailyReports,
+            lifeLogs: s.lifeLogs,
+          });
+        } else {
+          set({
+            subjects: serverData.subjects,
+            todos: serverData.todos,
+            studySessions: serverData.studySessions,
+            materials: serverData.materials,
+            materialUnits: serverData.materialUnits,
+            todoRecords: serverData.todoRecords,
+            proofPhotos: serverData.proofPhotos,
+            zoomSessions: serverData.zoomSessions,
+            dailyReports: serverData.dailyReports,
+            lifeLogs: serverData.lifeLogs,
+          });
+        }
+
+        set({ initialized: true });
+      },
+
       user: {
         id: 'demo-user',
         name: '김성현',
@@ -105,26 +160,49 @@ export const useStore = create<AppState>()(
         { id: 'sub5', userId: 'demo-user', name: '지구과학Ⅰ', color: 'navy', order: 4, createdAt: new Date().toISOString() },
       ],
       setSubjects: (subjects) => set({ subjects }),
-      addSubject: (subject) => set((s) => ({ subjects: [...s.subjects, subject] })),
-      updateSubject: (id, updates) => set((s) => ({
-        subjects: s.subjects.map((sub) => sub.id === id ? { ...sub, ...updates } : sub),
-      })),
-      deleteSubject: (id) => set((s) => ({ subjects: s.subjects.filter((sub) => sub.id !== id) })),
+      addSubject: (subject) => {
+        set((s) => ({ subjects: [...s.subjects, subject] }));
+        db.subjects.upsert(subject);
+      },
+      updateSubject: (id, updates) => {
+        set((s) => ({ subjects: s.subjects.map((sub) => sub.id === id ? { ...sub, ...updates } : sub) }));
+        const sub = get().subjects.find((s) => s.id === id);
+        if (sub) db.subjects.upsert(sub);
+      },
+      deleteSubject: (id) => {
+        set((s) => ({ subjects: s.subjects.filter((sub) => sub.id !== id) }));
+        db.subjects.delete(id);
+      },
 
       todos: [],
       setTodos: (todos) => set({ todos }),
-      addTodo: (todo) => set((s) => ({ todos: [...s.todos, todo] })),
-      updateTodo: (id, updates) => set((s) => ({
-        todos: s.todos.map((t) => t.id === id ? { ...t, ...updates } : t),
-      })),
-      deleteTodo: (id) => set((s) => ({ todos: s.todos.filter((t) => t.id !== id) })),
+      addTodo: (todo) => {
+        set((s) => ({ todos: [...s.todos, todo] }));
+        db.todos.upsert(todo);
+      },
+      updateTodo: (id, updates) => {
+        set((s) => ({ todos: s.todos.map((t) => t.id === id ? { ...t, ...updates } : t) }));
+        const todo = get().todos.find((t) => t.id === id);
+        if (todo) db.todos.upsert(todo);
+      },
+      deleteTodo: (id) => {
+        set((s) => ({ todos: s.todos.filter((t) => t.id !== id) }));
+        db.todos.delete(id);
+      },
 
       studySessions: [],
       setStudySessions: (sessions) => set({ studySessions: sessions }),
-      addStudySession: (session) => set((s) => ({ studySessions: [...s.studySessions, session] })),
-      updateStudySession: (id, updates) => set((s) => ({
-        studySessions: s.studySessions.map((sess) => sess.id === id ? { ...sess, ...updates } : sess),
-      })),
+      addStudySession: (session) => {
+        set((s) => ({ studySessions: [...s.studySessions, session] }));
+        db.studySessions.upsert(session);
+      },
+      updateStudySession: (id, updates) => {
+        set((s) => ({
+          studySessions: s.studySessions.map((sess) => sess.id === id ? { ...sess, ...updates } : sess),
+        }));
+        const sess = get().studySessions.find((s) => s.id === id);
+        if (sess) db.studySessions.upsert(sess);
+      },
 
       activeSessionId: null,
       activeTodoId: null,
@@ -137,49 +215,98 @@ export const useStore = create<AppState>()(
 
       materials: [],
       setMaterials: (materials) => set({ materials }),
-      addMaterial: (material) => set((s) => ({ materials: [...s.materials, material] })),
-      updateMaterial: (id, updates) => set((s) => ({
-        materials: s.materials.map((m) => m.id === id ? { ...m, ...updates } : m),
-      })),
-      deleteMaterial: (id) => set((s) => ({ materials: s.materials.filter((m) => m.id !== id) })),
+      addMaterial: (material) => {
+        set((s) => ({ materials: [...s.materials, material] }));
+        db.materials.upsert(material);
+      },
+      updateMaterial: (id, updates) => {
+        set((s) => ({ materials: s.materials.map((m) => m.id === id ? { ...m, ...updates } : m) }));
+        const mat = get().materials.find((m) => m.id === id);
+        if (mat) db.materials.upsert(mat);
+      },
+      deleteMaterial: (id) => {
+        set((s) => ({ materials: s.materials.filter((m) => m.id !== id) }));
+        db.materials.delete(id);
+      },
 
       materialUnits: [],
       setMaterialUnits: (units) => set({ materialUnits: units }),
-      addMaterialUnit: (unit) => set((s) => ({ materialUnits: [...s.materialUnits, unit] })),
-      updateMaterialUnit: (id, updates) => set((s) => ({
-        materialUnits: s.materialUnits.map((u) => u.id === id ? { ...u, ...updates } : u),
-      })),
+      addMaterialUnit: (unit) => {
+        set((s) => ({ materialUnits: [...s.materialUnits, unit] }));
+        db.materialUnits.upsert(unit);
+      },
+      updateMaterialUnit: (id, updates) => {
+        set((s) => ({
+          materialUnits: s.materialUnits.map((u) => u.id === id ? { ...u, ...updates } : u),
+        }));
+        const unit = get().materialUnits.find((u) => u.id === id);
+        if (unit) db.materialUnits.upsert(unit);
+      },
 
       todoRecords: [],
-      addTodoRecord: (record) => set((s) => ({ todoRecords: [...s.todoRecords, record] })),
-      updateTodoRecord: (id, updates) => set((s) => ({
-        todoRecords: s.todoRecords.map((r) => r.id === id ? { ...r, ...updates } : r),
-      })),
+      addTodoRecord: (record) => {
+        set((s) => ({ todoRecords: [...s.todoRecords, record] }));
+        db.todoRecords.upsert(record);
+      },
+      updateTodoRecord: (id, updates) => {
+        set((s) => ({
+          todoRecords: s.todoRecords.map((r) => r.id === id ? { ...r, ...updates } : r),
+        }));
+        const rec = get().todoRecords.find((r) => r.id === id);
+        if (rec) db.todoRecords.upsert(rec);
+      },
 
       proofPhotos: [],
-      addProofPhoto: (photo) => set((s) => ({ proofPhotos: [...s.proofPhotos, photo] })),
-      deleteProofPhoto: (id) => set((s) => ({ proofPhotos: s.proofPhotos.filter((p) => p.id !== id) })),
+      addProofPhoto: (photo) => {
+        set((s) => ({ proofPhotos: [...s.proofPhotos, photo] }));
+        db.proofPhotos.upsert(photo);
+      },
+      deleteProofPhoto: (id) => {
+        set((s) => ({ proofPhotos: s.proofPhotos.filter((p) => p.id !== id) }));
+        db.proofPhotos.delete(id);
+      },
 
       zoomSessions: [],
-      addZoomSession: (session) => set((s) => ({ zoomSessions: [...s.zoomSessions, session] })),
-      updateZoomSession: (id, updates) => set((s) => ({
-        zoomSessions: s.zoomSessions.map((z) => z.id === id ? { ...z, ...updates } : z),
-      })),
+      addZoomSession: (session) => {
+        set((s) => ({ zoomSessions: [...s.zoomSessions, session] }));
+        db.zoomSessions.upsert(session);
+      },
+      updateZoomSession: (id, updates) => {
+        set((s) => ({
+          zoomSessions: s.zoomSessions.map((z) => z.id === id ? { ...z, ...updates } : z),
+        }));
+        const z = get().zoomSessions.find((z) => z.id === id);
+        if (z) db.zoomSessions.upsert(z);
+      },
       activeZoomSession: null,
       setActiveZoomSession: (session) => set({ activeZoomSession: session }),
 
       dailyReports: [],
-      addDailyReport: (report) => set((s) => ({ dailyReports: [...s.dailyReports, report] })),
-      updateDailyReport: (id, updates) => set((s) => ({
-        dailyReports: s.dailyReports.map((r) => r.id === id ? { ...r, ...updates } : r),
-      })),
+      addDailyReport: (report) => {
+        set((s) => ({ dailyReports: [...s.dailyReports, report] }));
+        db.dailyReports.upsert(report);
+      },
+      updateDailyReport: (id, updates) => {
+        set((s) => ({
+          dailyReports: s.dailyReports.map((r) => r.id === id ? { ...r, ...updates } : r),
+        }));
+        const rep = get().dailyReports.find((r) => r.id === id);
+        if (rep) db.dailyReports.upsert(rep);
+      },
 
       lifeLogs: [],
       setLifeLogs: (logs) => set({ lifeLogs: logs }),
-      addLifeLog: (log) => set((s) => ({ lifeLogs: [...s.lifeLogs, log] })),
-      updateLifeLog: (id, updates) => set((s) => ({
-        lifeLogs: s.lifeLogs.map((l) => l.id === id ? { ...l, ...updates } : l),
-      })),
+      addLifeLog: (log) => {
+        set((s) => ({ lifeLogs: [...s.lifeLogs, log] }));
+        db.lifeLogs.upsert(log);
+      },
+      updateLifeLog: (id, updates) => {
+        set((s) => ({
+          lifeLogs: s.lifeLogs.map((l) => l.id === id ? { ...l, ...updates } : l),
+        }));
+        const log = get().lifeLogs.find((l) => l.id === id);
+        if (log) db.lifeLogs.upsert(log);
+      },
 
       currentTab: 'today',
       setCurrentTab: (tab) => set({ currentTab: tab }),
