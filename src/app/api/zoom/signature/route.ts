@@ -1,34 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 
-function generateZoomSignature(
-  sdkKey: string,
-  sdkSecret: string,
-  meetingNumber: string,
-  role: number
-): string {
-  const timestamp = new Date().getTime() - 30000;
-  const msg = Buffer.from(`${sdkKey}${meetingNumber}${timestamp}${role}`).toString('base64');
-  const hash = crypto.createHmac('sha256', sdkSecret).update(msg).digest('base64');
-  const signature = Buffer.from(`${sdkKey}.${meetingNumber}.${timestamp}.${role}.${hash}`).toString('base64');
-  return signature;
+function generateSignature(sdkKey: string, sdkSecret: string, meetingNumber: string, role: number): string {
+  const iat = Math.round(Date.now() / 1000) - 30;
+  const exp = iat + 60 * 60 * 2;
+
+  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+  const payload = Buffer.from(JSON.stringify({ sdkKey, mn: meetingNumber, role, iat, exp, tokenExp: exp })).toString('base64url');
+  const sig = crypto.createHmac('sha256', sdkSecret).update(`${header}.${payload}`).digest('base64url');
+
+  return `${header}.${payload}.${sig}`;
 }
 
 export async function POST(req: NextRequest) {
   const { meetingNumber, role } = await req.json();
 
-  const sdkKey = process.env.ZOOM_SDK_KEY || 'demo_sdk_key';
-  const sdkSecret = process.env.ZOOM_SDK_SECRET || 'demo_sdk_secret';
+  const sdkKey = process.env.ZOOM_SDK_KEY ?? '';
+  const sdkSecret = process.env.ZOOM_SDK_SECRET ?? '';
 
-  if (sdkKey === 'demo_sdk_key') {
-    return NextResponse.json({
-      signature: '',
-      sdkKey: '',
-      demoMode: true,
-      message: 'Zoom SDK credentials not configured. Set ZOOM_SDK_KEY and ZOOM_SDK_SECRET in .env.local',
-    });
+  if (!sdkKey || !sdkSecret) {
+    return NextResponse.json({ signature: '', sdkKey: '', demoMode: true });
   }
 
-  const signature = generateZoomSignature(sdkKey, sdkSecret, meetingNumber, role);
+  const cleanNumber = String(meetingNumber).replace(/\D/g, '');
+  const signature = generateSignature(sdkKey, sdkSecret, cleanNumber, role ?? 0);
   return NextResponse.json({ signature, sdkKey, demoMode: false });
 }
