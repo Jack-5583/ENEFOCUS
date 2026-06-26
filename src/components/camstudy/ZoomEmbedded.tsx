@@ -12,92 +12,45 @@ interface Props {
   onLeave?: () => void;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyClient = any;
-
 export function ZoomEmbedded({ meetingNumber, password, userName, role, signature, sdkKey, onLeave }: Props) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const clientRef = useRef<AnyClient>(null);
-  const [status, setStatus] = useState<'loading' | 'joined' | 'error'>('loading');
-  const [errorMsg, setErrorMsg] = useState('');
+  const [iframeReady, setIframeReady] = useState(false);
+  const [error, setError] = useState('');
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  const cleanNumber = meetingNumber.replace(/\D/g, '');
+
+  const src = `/zoom-session?mn=${encodeURIComponent(cleanNumber)}&sig=${encodeURIComponent(signature)}&key=${encodeURIComponent(sdkKey)}&pwd=${encodeURIComponent(password)}&un=${encodeURIComponent(userName)}&role=${role}`;
 
   useEffect(() => {
-    let mounted = true;
-
-    async function initZoom() {
-      if (!containerRef.current) return;
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const mod: any = await import('@zoom/meetingsdk/embedded');
-        const ZoomMtgEmbedded = mod.default ?? mod;
-        const client: AnyClient = ZoomMtgEmbedded.createClient();
-        clientRef.current = client;
-
-        const width = Math.min(containerRef.current.offsetWidth || 800, 960);
-
-        await client.init({
-          zoomAppRoot: containerRef.current,
-          language: 'ko-KR',
-          customize: {
-            video: {
-              isResizable: true,
-              viewSizes: {
-                default: { width, height: 480 },
-                ribbon: { width, height: 480 },
-              },
-            },
-          },
-        });
-
-        await client.join({
-          signature,
-          sdkKey,
-          meetingNumber: meetingNumber.replace(/\D/g, ''),
-          password,
-          userName,
-          role,
-        });
-
-        if (mounted) setStatus('joined');
-
-        client.on('connection-change', (payload: { state: string }) => {
-          if (payload.state === 'Closed' || payload.state === 'Fail') {
-            onLeave?.();
-          }
-        });
-      } catch (e: unknown) {
-        if (mounted) {
-          setErrorMsg(e instanceof Error ? e.message : '알 수 없는 오류가 발생했습니다.');
-          setStatus('error');
-        }
+    function handleMessage(ev: MessageEvent) {
+      if (ev.source !== iframeRef.current?.contentWindow) return;
+      if (ev.data?.type === 'zoom-leave') {
+        onLeave?.();
+      }
+      if (ev.data?.type === 'zoom-error') {
+        setError(ev.data.message ?? '알 수 없는 오류');
       }
     }
-
-    initZoom();
-
-    return () => {
-      mounted = false;
-      try { clientRef.current?.leaveMeeting?.(); } catch {}
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [onLeave]);
 
   return (
     <div className="relative w-full bg-black rounded-2xl overflow-hidden" style={{ minHeight: 480 }}>
-      {status === 'loading' && (
+      {!iframeReady && !error && (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-black">
           <Loader2 size={36} className="text-white animate-spin mb-3" />
           <p className="text-white text-sm">Zoom 연결 중...</p>
-          <p className="text-gray-500 text-xs mt-1">{meetingNumber}</p>
+          <p className="text-gray-500 text-xs mt-1">{cleanNumber}</p>
         </div>
       )}
-      {status === 'error' && (
+      {error && (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-black p-6 text-center">
           <AlertCircle size={36} className="text-red-400 mb-3" />
           <p className="text-red-400 text-sm font-semibold mb-2">Zoom 연결 실패</p>
-          <p className="text-gray-400 text-xs mb-4">{errorMsg}</p>
+          <p className="text-gray-400 text-xs mb-4">{error}</p>
           <a
-            href={`https://zoom.us/wc/${meetingNumber.replace(/\D/g, '')}/join`}
+            href={`https://zoom.us/wc/${cleanNumber}/join`}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 text-white text-xs bg-white/10 hover:bg-white/20 px-4 py-2 rounded-full transition-colors"
@@ -107,7 +60,14 @@ export function ZoomEmbedded({ meetingNumber, password, userName, role, signatur
           </a>
         </div>
       )}
-      <div ref={containerRef} style={{ width: '100%', minHeight: 480 }} />
+      <iframe
+        ref={iframeRef}
+        src={src}
+        allow="camera; microphone; display-capture; autoplay; clipboard-write"
+        style={{ width: '100%', minHeight: 480, border: 'none', display: error ? 'none' : 'block' }}
+        onLoad={() => setIframeReady(true)}
+        title="Zoom Meeting"
+      />
     </div>
   );
 }
